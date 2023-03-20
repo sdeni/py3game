@@ -1,5 +1,6 @@
 # Example file showing a basic pygame "game loop"
 import time
+from dataclasses import dataclass
 from random import random
 
 import asyncio
@@ -7,6 +8,8 @@ import asyncio
 import pygame
 import threading
 import logging
+
+do_data_exchange = True
 
 def prepare_image(file_name, scale, angle):
     img = pygame.image.load(file_name)
@@ -65,17 +68,11 @@ class Player:
     def __init__(self, screen, image_files, scale, angle):
         self.x = 0
         self.y = 0
-
-        self.screen_width = screen.get_width()
-        self.screen_height = screen.get_height()
         self.screen = screen
 
-        self.width = 50
-        self.height = 50
         self.color = "green"
-        self.speed_x = 0
-        self.speed_y = 0
-        self.acceleration = 0.1
+
+        self.is_active = False
 
         self.image_index = 0
 
@@ -87,52 +84,21 @@ class Player:
         self.rect = self.image.get_rect()
 
     def draw(self):
-        self.screen.blit(self.image, self.rect)
-
-        # pygame.draw.rect(self.screen, self.color, (self.x, self.y, self.width, self.height))
+        if self.is_active:
+            self.screen.blit(self.image, self.rect)
 
     def update(self):
-        self.x += self.speed_x
-        self.y += self.speed_y
+        if self.is_active:
+            self.image_index += 1
+            self.image_index %= len(self.images)
 
-        # prevent player from going off screen
-        if self.x < 0:
-            self.x = 0
-        elif self.x > self.screen.get_width() - self.width:
-            self.x = self.screen.get_width() - self.width
-        if self.y < 0:
-            self.y = 0
-        elif self.y > self.screen.get_height() - self.height:
-            self.y = self.screen.get_height() - self.height
+            self.image = self.images[self.image_index]
 
-        # add friction
-        if self.speed_x > 0:
-            self.speed_x -= self.acceleration * 0.5
-        elif self.speed_x < 0:
-            self.speed_x += self.acceleration * 0.5
-        if self.speed_y > 0:
-            self.speed_y -= self.acceleration * 0.5
-        elif self.speed_y < 0:
-            self.speed_y += self.acceleration * 0.5
-
-        self.image_index += 1
-        self.image_index %= len(self.images)
-
-        self.image = self.images[self.image_index]
-
-        self.rect.x = self.x
-        self.rect.y = self.y
-
-
-    def move(self, direction):
-        if direction == "up":
-            self.speed_y += -self.acceleration
-        elif direction == "down":
-            self.speed_y += self.acceleration
-        elif direction == "left":
-            self.speed_x += -self.acceleration
-        elif direction == "right":
-            self.speed_x += self.acceleration
+            try:
+                self.rect.x = self.x
+                self.rect.y = self.y
+            except:
+                logging.warning("Player.update EXCEPTION: self.x or self.y is None")
 
 
 class Bullet:
@@ -184,6 +150,14 @@ class Bullet:
         self.rect.x = self.x
         self.rect.y = self.y
 
+@dataclass
+class PlayerEvents:
+    up: bool = False
+    down: bool = False
+    left: bool = False
+    right: bool = False
+    fire: bool = False
+
 def main():
     # pygame setup
     pygame.init()
@@ -191,15 +165,16 @@ def main():
     clock = pygame.time.Clock()
     running = True
 
-    player = Player(screen, ["images/ship1.png", "images/ship2.png", "images/ship3.png"], 0.25, 0)
     console = Console(screen)
-
-    down_key = False
-    up_key = False
-    left_key = False
-    right_key = False
+    player = Player(screen, ["images/ship1.png", "images/ship2.png", "images/ship3.png"], 0.25, 0)
+    player_events = PlayerEvents()
 
     bullets = []
+    other_players = []
+
+    do_data_exchange = True
+    de_thread = threading.Thread(target=data_exchange_thread, args=(player, player_events, other_players))
+    de_thread.start()
 
     while running:
         # poll for events
@@ -209,19 +184,15 @@ def main():
                 running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
-                    up_key = True
+                    player_events.up = True
                 elif event.key == pygame.K_DOWN:
-                    down_key = True
+                    player_events.down = True
                 elif event.key == pygame.K_LEFT:
-                    left_key = True
+                    player_events.left = True
                 elif event.key == pygame.K_RIGHT:
-                    right_key = True
+                    player_events.right = True
                 elif event.key == pygame.K_SPACE:
-                    bullet = Bullet(screen, ['images/bullet.png'], 0.25, 0)
-                    bullet.x = player.x + player.width / 2 - bullet.width / 2
-                    bullet.y = player.y + player.height / 2 - bullet.height / 2
-                    bullet.speed_y = -1
-                    bullets.append(bullet)
+                    player_events.fire = True
 
                 elif event.key == pygame.K_c:
                     if console.visible:
@@ -231,22 +202,13 @@ def main():
 
             elif event.type == pygame.KEYUP:
                 if event.key == pygame.K_UP:
-                    up_key = False
+                    player_events.up = False
                 elif event.key == pygame.K_DOWN:
-                    down_key = False
+                    player_events.down = False
                 elif event.key == pygame.K_LEFT:
-                    left_key = False
+                    player_events.left = False
                 elif event.key == pygame.K_RIGHT:
-                    right_key = False
-
-        if up_key:
-            player.move("up")
-        if down_key:
-            player.move("down")
-        if left_key:
-            player.move("left")
-        if right_key:
-            player.move("right")
+                    player_events.right = False
 
         # fill the screen with a color to wipe away anything from last frame
         screen.fill("black")
@@ -254,15 +216,24 @@ def main():
         player.update()
         player.draw()
 
+        for other_player in other_players:
+            other_player.update()
+            other_player.draw()
+
         # remove inactive bullets
-        for bullet in bullets:
-            bullet.update()
-            bullet.draw()
+        # for bullet in bullets:
+        #     bullet.update()
+        #     bullet.draw()
 
-        bullets = [bullet for bullet in bullets if bullet.is_active]
+        # bullets = [bullet for bullet in bullets if bullet.is_active]
 
-        console.log(
-            f"Player x: {int(player.x)}, y: {int(player.y)}; Speed x: {int(player.speed_x)}, Speed y: {int(player.speed_y)}")
+        # bullet = Bullet(screen, ['images/bullet.png'], 0.25, 0)
+        # bullet.x = player.x + player.width / 2 - bullet.width / 2
+        # bullet.y = player.y + player.height / 2 - bullet.height / 2
+        # bullet.speed_y = -1
+        # bullets.append(bullet)
+
+        console.log(f"Player x: {int(player.x)}, y: {int(player.y)};")
         console.draw()
 
         # flip() the display to put your work on screen
@@ -272,48 +243,98 @@ def main():
 
     pygame.quit()
 
+    do_data_exchange = False
+    de_thread.join()
 
 class GameClient:
-    def __init__(self):
+    def __init__(self, player, player_events, other_players):
         self.id = None
+        self.player = player
+        self.player_events = player_events
+        self.other_players = other_players
         self.do_data_exchange = True
 
     # read messages from the server and print them to the console
     async def receive_messages(self, reader):
-        while do_data_exchange:
-            logging.info("Waiting for message")
+        while self.do_data_exchange:
+            # logging.info("Waiting for message")
             message = await reader.readline()
-            logging.info("Message received")
+            # logging.info(f"Message received: {message}")
             if not message:
                 logging.warning("Empty message!")
                 self.do_data_exchange = False
                 break
 
             message_data = message.decode().rstrip()
-            logging.info(f"Message: {message_data}")
-            cmd, data = message_data.split(":")
-            data_parts = data.split(",")
+            # logging.info(f"Message: {message_data}")
+            data_parts = []
 
-            if cmd == "id":
-                # get the id from the message
-                self.id = data_parts[0]
-                logging.info(f"Client ID got: {self.id}")
+            if ':' in message_data:
+                logging.info(f"Command message.")
+                cmd, data = message_data.split(":")
+                data_parts = data.split(",")
+
+                if cmd == "id":
+                    # get the id from the message
+                    self.id = data_parts[0]
+                    logging.info(f"Player ID got: {self.id}")
+                    self.player.x = int(data_parts[1])
+                    self.player.y = int(data_parts[2])
+                    self.player.is_active = True
+            else:
+                data_parts = message_data.split(",")
+                self.player.x = float(data_parts[0])
+                self.player.y = float(data_parts[1])
+
+                if len(data_parts) > 2:
+                    k = (len(data_parts) - 2) // 2
+
+                    # todo: check IDs
+                    if len(self.other_players) >= k:
+                        self.other_players = self.other_players[:k]
+
+                    for i in range(k):
+                        x = float(data_parts[2 + i * 2])
+                        y = float(data_parts[2 + i * 2 + 1])
+
+                        if len(self.other_players) <= i:
+                            other_player = Player(self.player.screen, ["images/e-ship1.png", "images/e-ship2.png", "images/e-ship3.png"], 0.25, 0)
+                            self.other_players.append(other_player)
+
+                        self.other_players[i].x = x
+                        self.other_players[i].y = y
+                        self.other_players[i].is_active = True
+
+                await asyncio.sleep(0.1)
 
 
     # read messages from the user and send them to the server
     async def send_messages(self, writer):
         logging.info(f'Send message loop started.')
-        while do_data_exchange:
+        while self.do_data_exchange:
             if self.id is not None:
-                message = f"{0},12,15"
-                logging.info(f'Sending: {message}')
+                x_move = 0
+                if self.player_events.right:
+                    x_move = 1
+                elif self.player_events.left:
+                    x_move = -1
+
+                y_move = 0
+                if self.player_events.up:
+                    y_move = -1
+                elif self.player_events.down:
+                    y_move = 1
+
+                message = f"{x_move},{y_move}\n"
+                # logging.info(f'Sending: {message}')
                 writer.write((message).encode())
                 # writer.write_eof()
                 await writer.drain()
+                await asyncio.sleep(0.1)
             else:
-                logging.info("Client ID is not set yet.")
+                await asyncio.sleep(0.1)
+                # logging.info("Player ID is not set yet.")
 
-            await asyncio.sleep(1)
     async def connect(self):
         self.reader, self.writer = await asyncio.open_connection('localhost', 8888)
         # get event loop
@@ -326,12 +347,12 @@ class GameClient:
         # await asyncio.create_task(self.send_messages(self.writer))
         # #
         await asyncio.gather(t1, t2)
-def data_exchange_thread():
+def data_exchange_thread(player, player_events, other_players):
     logging.info("Data exchange thread started.")
 
     loop = asyncio.new_event_loop()
 
-    client = GameClient()
+    client = GameClient(player, player_events, other_players)
     # loop = asyncio.get_event_loop()
 
     try:
@@ -362,23 +383,14 @@ def demo_thread():
 
 
 if __name__ == "__main__":
-    format = "%(asctime)s: %(message)s"
+    format = "CLI: %(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
 
     logging.info("Game client program started.")
 
-    test = 1
-
-    do_data_exchange = True
-    de_thread = threading.Thread(target=data_exchange_thread)
-    de_thread.start()
-
     main()
 
     logging.info("Main game loop finished.")
-    do_data_exchange = False
-
-    de_thread.join()
 
     logging.info("Game program finished.")
