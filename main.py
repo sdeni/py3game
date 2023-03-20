@@ -1,11 +1,10 @@
 # Example file showing a basic pygame "game loop"
-import pygame
+import time
+from random import random
 
-# pygame setup
-pygame.init()
-screen = pygame.display.set_mode((800, 800))
-clock = pygame.time.Clock()
-running = True
+import pygame
+import threading
+import logging
 
 def prepare_image(file_name, scale, angle):
     img = pygame.image.load(file_name)
@@ -39,20 +38,20 @@ class Console:
             return
 
         # draw transparent background with alpha 128
-        # pygame.draw.rect(screen, self.color, (self.x, self.y, self.width, self.height), 0, pygame.BLEND_RGBA_MULT)
+        # pygame.draw.rect(self.screen, self.color, (self.x, self.y, self.width, self.height), 0, pygame.BLEND_RGBA_MULT)
 
         s = pygame.Surface((self.width, self.height))  # the size of your rect
         s.set_alpha(80)  # alpha level
         s.fill(self.color)  # this fills the entire surface
-        screen.blit(s, (self.x, self.y))
+        self.screen.blit(s, (self.x, self.y))
 
-        # pygame.draw.rect(screen, self.color, (self.x, self.y, self.width, self.height))
+        # pygame.draw.rect(self.screen, self.color, (self.x, self.y, self.width, self.height))
 
         text = self.font.render(self.text, True, "white")
 
         # draw transparent text
         text.set_alpha(190)
-        screen.blit(text, (self.x + 10, self.y + 10))
+        self.screen.blit(text, (self.x + 10, self.y + 10))
 
     def log(self, text):
         self.text = text
@@ -88,7 +87,7 @@ class Player:
     def draw(self):
         self.screen.blit(self.image, self.rect)
 
-        # pygame.draw.rect(screen, self.color, (self.x, self.y, self.width, self.height))
+        # pygame.draw.rect(self.screen, self.color, (self.x, self.y, self.width, self.height))
 
     def update(self):
         self.x += self.speed_x
@@ -97,12 +96,12 @@ class Player:
         # prevent player from going off screen
         if self.x < 0:
             self.x = 0
-        elif self.x > screen.get_width() - self.width:
-            self.x = screen.get_width() - self.width
+        elif self.x > self.screen.get_width() - self.width:
+            self.x = self.screen.get_width() - self.width
         if self.y < 0:
             self.y = 0
-        elif self.y > screen.get_height() - self.height:
-            self.y = screen.get_height() - self.height
+        elif self.y > self.screen.get_height() - self.height:
+            self.y = self.screen.get_height() - self.height
 
         # add friction
         if self.speed_x > 0:
@@ -164,7 +163,7 @@ class Bullet:
         if not self.is_active:
             return
 
-        pygame.draw.rect(screen, self.color, (self.x, self.y, self.width, self.height))
+        pygame.draw.rect(self.screen, self.color, (self.x, self.y, self.width, self.height))
 
     def update(self):
 
@@ -183,83 +182,135 @@ class Bullet:
         self.rect.x = self.x
         self.rect.y = self.y
 
+def main():
+    # pygame setup
+    pygame.init()
+    screen = pygame.display.set_mode((800, 800))
+    clock = pygame.time.Clock()
+    running = True
 
-player = Player(screen, ["images/ship1.png", "images/ship2.png", "images/ship3.png"], 0.25, 0)
-console = Console(screen)
+    player = Player(screen, ["images/ship1.png", "images/ship2.png", "images/ship3.png"], 0.25, 0)
+    console = Console(screen)
 
-down_key = False
-up_key = False
-left_key = False
-right_key = False
+    down_key = False
+    up_key = False
+    left_key = False
+    right_key = False
 
-bullets = []
+    bullets = []
 
-while running:
-    # poll for events
-    # pygame.QUIT event means the user clicked X to close your window
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP:
-                up_key = True
-            elif event.key == pygame.K_DOWN:
-                down_key = True
-            elif event.key == pygame.K_LEFT:
-                left_key = True
-            elif event.key == pygame.K_RIGHT:
-                right_key = True
-            elif event.key == pygame.K_SPACE:
-                bullet = Bullet(screen, ['images/bullet.png'], 0.25, 0)
-                bullet.x = player.x + player.width / 2 - bullet.width / 2
-                bullet.y = player.y + player.height / 2 - bullet.height / 2
-                bullet.speed_y = -1
-                bullets.append(bullet)
+    while running:
+        # poll for events
+        # pygame.QUIT event means the user clicked X to close your window
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    up_key = True
+                elif event.key == pygame.K_DOWN:
+                    down_key = True
+                elif event.key == pygame.K_LEFT:
+                    left_key = True
+                elif event.key == pygame.K_RIGHT:
+                    right_key = True
+                elif event.key == pygame.K_SPACE:
+                    bullet = Bullet(screen, ['images/bullet.png'], 0.25, 0)
+                    bullet.x = player.x + player.width / 2 - bullet.width / 2
+                    bullet.y = player.y + player.height / 2 - bullet.height / 2
+                    bullet.speed_y = -1
+                    bullets.append(bullet)
 
-            elif event.key == pygame.K_c:
-                if console.visible:
-                    console.hide()
-                else:
-                    console.show()
+                elif event.key == pygame.K_c:
+                    if console.visible:
+                        console.hide()
+                    else:
+                        console.show()
 
-        elif event.type == pygame.KEYUP:
-            if event.key == pygame.K_UP:
-                up_key = False
-            elif event.key == pygame.K_DOWN:
-                down_key = False
-            elif event.key == pygame.K_LEFT:
-                left_key = False
-            elif event.key == pygame.K_RIGHT:
-                right_key = False
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_UP:
+                    up_key = False
+                elif event.key == pygame.K_DOWN:
+                    down_key = False
+                elif event.key == pygame.K_LEFT:
+                    left_key = False
+                elif event.key == pygame.K_RIGHT:
+                    right_key = False
 
-    if up_key:
-        player.move("up")
-    if down_key:
-        player.move("down")
-    if left_key:
-        player.move("left")
-    if right_key:
-        player.move("right")
+        if up_key:
+            player.move("up")
+        if down_key:
+            player.move("down")
+        if left_key:
+            player.move("left")
+        if right_key:
+            player.move("right")
 
-    # fill the screen with a color to wipe away anything from last frame
-    screen.fill("black")
+        # fill the screen with a color to wipe away anything from last frame
+        screen.fill("black")
 
-    player.update()
-    player.draw()
+        player.update()
+        player.draw()
 
-    # remove inactive bullets
-    for bullet in bullets:
-        bullet.update()
-        bullet.draw()
+        # remove inactive bullets
+        for bullet in bullets:
+            bullet.update()
+            bullet.draw()
 
-    bullets = [bullet for bullet in bullets if bullet.is_active]
+        bullets = [bullet for bullet in bullets if bullet.is_active]
 
-    console.log(f"Player x: {int(player.x)}, y: {int(player.y)}; Speed x: {int(player.speed_x)}, Speed y: {int(player.speed_y)}")
-    console.draw()
+        console.log(
+            f"Player x: {int(player.x)}, y: {int(player.y)}; Speed x: {int(player.speed_x)}, Speed y: {int(player.speed_y)}")
+        console.draw()
 
-    # flip() the display to put your work on screen
-    pygame.display.flip()
+        # flip() the display to put your work on screen
+        pygame.display.flip()
 
-    clock.tick(60)  # limits FPS to 60
+        clock.tick(60)  # limits FPS to 60
 
-pygame.quit()
+    pygame.quit()
+
+def data_exchange_thread():
+    logging.info("Data exchange thread started.")
+
+    test = 2
+    while do_data_exchange:
+        logging.info("Data exchange round started.")
+        for n in range(10000000):
+            if not do_data_exchange:
+                break
+
+            test = int(random()*10000.0)+1
+            if test == 0:
+                test = 3
+
+            test %= 10000
+            if (test % 12432534123) == 64234324:
+                logging.info(f"Lucky data got: {test}")
+                time.sleep(5)
+
+        logging.info("Data exchange round finished.")
+
+    logging.info("Data exchange thread finished.")
+
+if __name__ == "__main__":
+    format = "%(asctime)s: %(message)s"
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%H:%M:%S")
+
+    logging.info("Game client program started.")
+
+    test = 1
+
+    do_data_exchange = True
+    de_thread = threading.Thread(target=data_exchange_thread)
+    de_thread.start()
+
+    main()
+
+    logging.info("Main game loop finished.")
+    do_data_exchange = False
+
+    de_thread.join()
+
+    logging.info("Game program finished.")
