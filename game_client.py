@@ -2,6 +2,8 @@
 import time
 from random import random
 
+import asyncio
+
 import pygame
 import threading
 import logging
@@ -270,12 +272,77 @@ def main():
 
     pygame.quit()
 
+
+class GameClient:
+    def __init__(self):
+        self.id = None
+        self.do_data_exchange = True
+
+    # read messages from the server and print them to the console
+    async def receive_messages(self, reader):
+        while do_data_exchange:
+            logging.info("Waiting for message")
+            message = await reader.readline()
+            logging.info("Message received")
+            if not message:
+                logging.warning("Empty message!")
+                self.do_data_exchange = False
+                break
+
+            message_data = message.decode().rstrip()
+            logging.info(f"Message: {message_data}")
+            cmd, data = message_data.split(":")
+            data_parts = data.split(",")
+
+            if cmd == "id":
+                # get the id from the message
+                self.id = data_parts[0]
+                logging.info(f"Client ID got: {self.id}")
+
+
+    # read messages from the user and send them to the server
+    async def send_messages(self, writer):
+        logging.info(f'Send message loop started.')
+        while do_data_exchange:
+            if self.id is not None:
+                message = f"{0},12,15"
+                logging.info(f'Sending: {message}')
+                writer.write((message).encode())
+                # writer.write_eof()
+                await writer.drain()
+            else:
+                logging.info("Client ID is not set yet.")
+
+            await asyncio.sleep(1)
+    async def connect(self):
+        self.reader, self.writer = await asyncio.open_connection('localhost', 8888)
+        # get event loop
+        loop = asyncio.get_event_loop()
+
+        t2 = asyncio.create_task(self.receive_messages(self.reader))
+        t1 = asyncio.create_task(self.send_messages(self.writer))
+
+        # await asyncio.create_task(self.receive_messages(self.reader))
+        # await asyncio.create_task(self.send_messages(self.writer))
+        # #
+        await asyncio.gather(t1, t2)
 def data_exchange_thread():
     logging.info("Data exchange thread started.")
 
+    loop = asyncio.new_event_loop()
+
+    client = GameClient()
+    # loop = asyncio.get_event_loop()
+
+    try:
+        loop.run_until_complete(client.connect())
+    except KeyboardInterrupt:
+        pass
+
+def demo_thread():
     test = 2
     while do_data_exchange:
-        logging.info("Data exchange round started.")
+        logging.info("Demo thread round started.")
         for n in range(10000000):
             if not do_data_exchange:
                 break
@@ -289,9 +356,10 @@ def data_exchange_thread():
                 logging.info(f"Lucky data got: {test}")
                 time.sleep(5)
 
-        logging.info("Data exchange round finished.")
+        logging.info("Demo thread round finished.")
 
-    logging.info("Data exchange thread finished.")
+    logging.info("Demo thread thread finished.")
+
 
 if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"
