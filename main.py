@@ -252,7 +252,10 @@ while running:
         bullet.update()
         bullet.draw()
 
-    bullets = [bullet for bullet in bullets if bullet.is_active]
+    # remove inactive bullets - probably want to do this in a better way
+    for bullet in bullets:
+        if not bullet.is_active:
+            bullets.remove(bullet)
 
     console.log(f"Player x: {int(player.x)}, y: {int(player.y)}; Speed x: {int(player.speed_x)}, Speed y: {int(player.speed_y)}")
     console.draw()
