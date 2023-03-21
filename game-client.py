@@ -144,9 +144,14 @@ async def receive_events(player, other_players, reader):
         # await asyncio.sleep(0.05)
 
 async def data_exchange(player, eventsData, other_players):
-    reader, writer = await asyncio.open_connection('localhost', 8888)
+    reader, writer = await asyncio.open_connection('54.179.74.242', 8888)
 
     initial_data = await reader.readline()
+    # check if data is empty
+    if not initial_data:
+        logging.error("initial data is empty")
+        return
+
     logging.info(f"initial data received: {initial_data.decode()}")
     data_parts=initial_data.decode().split(":")
     player.id = int(data_parts[1])

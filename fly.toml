@@ -1,0 +1,4 @@
+# fly.toml file generated for game-server on 2023-03-22T01:56:56+07:00
+
+app = "game-server"
+primary_region = "hkg"

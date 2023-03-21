@@ -97,7 +97,7 @@ class GameServer:
         logging.info(f'Client disconnected')
 
     async def start(self):
-        server = await asyncio.start_server(self.handle_client, '0.0.0.0', 8888)
+        server = await asyncio.start_server(self.handle_client, '0.0.0.0', 80)
 
         async with server:
             await server.serve_forever()
@@ -122,5 +122,3 @@ if __name__ == '__main__':
     #
     # loop.close()
 
-
-    asyncio.run()
