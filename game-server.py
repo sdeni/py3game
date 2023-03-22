@@ -97,7 +97,7 @@ class GameServer:
         logging.info(f'Client disconnected')
 
     async def start(self):
-        server = await asyncio.start_server(self.handle_client, '0.0.0.0', 80)
+        server = await asyncio.start_server(self.handle_client, '0.0.0.0', 8888)
 
         async with server:
             await server.serve_forever()
@@ -107,9 +107,10 @@ class GameServer:
 
 if __name__ == '__main__':
     format = "SRV: %(asctime)s: %(message)s"
-    logging.basicConfig(format=format, level=logging.ERROR,
+    logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%F-%H-%M-%S")
 
+    logging.info("Starting server...")
     game_server = GameServer()
 
     asyncio.run(game_server.run())
